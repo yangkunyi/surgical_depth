@@ -1,0 +1,9 @@
+defaults:
+  - default
+  - _self_
+
+accelerator: gpu
+devices: 1
+overfit_batches: 5
+max_epochs: 1000
+limit_val_batches: 0

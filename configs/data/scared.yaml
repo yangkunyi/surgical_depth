@@ -1,0 +1,10 @@
+_target_: src.data.scared_datamodule.SCAREDDataModule
+data_dir: "/bd_byta6000i0/users/surgical_depth/SCARED_fixed/scared.hdf5"
+split_dir: ${paths.data_dir}
+batch_size: 12 
+video_length: 4
+height: 224
+width: 280
+num_scales: 1
+num_workers: 8
+pin_memory: True

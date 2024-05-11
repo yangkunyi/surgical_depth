@@ -1,0 +1,16 @@
+_target_: src.models.depth_module.DepthLitModule
+
+optimizer:
+  _target_: torch.optim.Adam
+  _partial_: true
+  lr: 0.001
+  weight_decay: 0.0
+
+scheduler: null
+
+alpha: 0.1
+
+beta: 0.9
+
+# compile model for faster training with pytorch 2.0
+compile: false
