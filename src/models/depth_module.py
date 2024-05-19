@@ -71,6 +71,8 @@ class DepthLitModule(LightningModule):
         self.temporal_encoder = R2Plus1D([2,2,2,2])
         self.dino_encoder = DinoEncoder()
         self.depth_decoder = DPTHead(1)
+        
+        self.dino_encoder.requires_grad_(False)
         # loss function
         self.criterion = torch.nn.MSELoss()
         self.feature_loss = MeanMetric()
@@ -136,7 +138,7 @@ class DepthLitModule(LightningModule):
         for i in range(len(cnn_feature)):
             self.feature_loss.update(self.hparams.alpha * self.criterion(cnn_feature[i], dino_feature[i]))
         
-        gt_depth = F.interpolate(gt_depth, size = pred_depth.shape[-3:])
+        pred_depth = F.interpolate(pred_depth, size = gt_depth.shape[-3:])
 
         mask = (gt_depth > MIN_DEPTH) & (gt_depth < MAX_DEPTH)
 
@@ -247,11 +249,7 @@ class DepthLitModule(LightningModule):
 
         :return: A dict containing the configured optimizers and learning-rate schedulers to be used for training.
         """
-        optimizer = self.hparams.optimizer([
-            {"params":self.temporal_encoder.parameters()},
-            {"params":self.depth_decoder.parameters()},
-            {"params":self.dino_encoder.parameters()}
-        ])
+        optimizer = self.hparams.optimizer(self.parameters())
         if self.hparams.scheduler is not None:
             scheduler = self.hparams.scheduler(optimizer=optimizer)
             return {
