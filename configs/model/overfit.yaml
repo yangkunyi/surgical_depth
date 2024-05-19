@@ -8,9 +8,9 @@ optimizer:
 
 scheduler: null
 
-alpha: 0.1
+alpha: 0.0
 
-beta: 0.9
+beta: 1.0
 
 # compile model for faster training with pytorch 2.0
 compile: false

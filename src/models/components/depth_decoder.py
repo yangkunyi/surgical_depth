@@ -20,7 +20,7 @@ def _make_fusion_block(features, use_bn, size = None):
     )
 
 class DPTHead(nn.Module):
-    def __init__(self, nclass, features=192, use_bn=False, out_channels=[96, 192, 384, 768], use_clstoken=False):
+    def __init__(self, nclass, features=192, use_bn=False, out_channels=[96 * 2, 192 * 2, 384 * 2, 768 * 2], use_clstoken=False):
         super().__init__()
         
         self.nclass = nclass

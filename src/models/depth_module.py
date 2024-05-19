@@ -127,13 +127,16 @@ class DepthLitModule(LightningModule):
 
         cnn_feature = self.temporal_encoder(batch['color_clip'])
         dino_feature = self.dino_encoder.temporal_forward(batch['color_clip'])
-        pred_depth = self.depth_decoder.temporal_forward(cnn_feature, patch_h, patch_w)
+        feature = []
+        for i in range(len(cnn_feature)):
+            feature.append(torch.cat((cnn_feature[i], dino_feature[i]), dim=1))
+        pred_depth = self.depth_decoder.temporal_forward(feature, patch_h, patch_w)
         gt_depth = batch['depth_gt_clip']
 
         for i in range(len(cnn_feature)):
             self.feature_loss.update(self.hparams.alpha * self.criterion(cnn_feature[i], dino_feature[i]))
         
-        pred_depth = F.interpolate(pred_depth, size = gt_depth.shape[-3:])
+        gt_depth = F.interpolate(gt_depth, size = pred_depth.shape[-3:])
 
         mask = (gt_depth > MIN_DEPTH) & (gt_depth < MAX_DEPTH)
 
@@ -168,7 +171,7 @@ class DepthLitModule(LightningModule):
         self.log("train/loss_gt", self.train_loss_gt.compute(), on_step=False, on_epoch=True, prog_bar=True)
         self.log("train/loss_feature", self.train_loss_feature.compute(), on_step=False, on_epoch=True, prog_bar=True)
         # self.start_time = time.time()
-        return loss
+        return loss_gt
 
     def on_train_epoch_end(self) -> None:
         "Lightning hook that is called when a training epoch ends."
