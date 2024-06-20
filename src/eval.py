@@ -5,6 +5,7 @@ import rootutils
 from lightning import LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
 from omegaconf import DictConfig
+import pickle
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 # ------------------------------------------------------------------------------------ #
@@ -72,14 +73,20 @@ def evaluate(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         log_hyperparameters(object_dict)
 
     log.info("Starting testing!")
-    trainer.test(model=model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
+    # trainer.test(model=model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
 
     # for predictions use trainer.predict(...)
-    # predictions = trainer.predict(model=model, dataloaders=dataloaders, ckpt_path=cfg.ckpt_path)
 
-    metric_dict = trainer.callback_metrics
+    predictions = trainer.predict(model=model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
 
-    return metric_dict, object_dict
+    with open('my_data.pkl', 'wb') as f:
+    # 使用 pickle.dump() 将对象存储到文件中
+        pickle.dump(predictions, f)
+
+
+    # metric_dict = trainer.callback_metrics
+
+    # return metric_dict, object_dict
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="eval.yaml")

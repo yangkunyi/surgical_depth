@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional, Tuple, List
 import torch
 import os
 from lightning import LightningDataModule
-from torch.utils.data import ConcatDataset, DataLoader, Dataset, random_split
+from torch.utils.data import ConcatDataset, DataLoader, Dataset, random_split, Sampler,  SubsetRandomSampler
 # from torchvision.datasets import MNIST
 from torchvision.transforms import transforms
 from src.data.components import MonoDataset
@@ -161,12 +161,26 @@ class SCAREDDataModule(LightningDataModule):
 
         :return: The train dataloader.
         """
+        # sampler = FixedBatchesSampler(self.data_train, self.batch_size_per_device, 5)
+        # return DataLoader(self.data_train, batch_size=None, sampler=sampler)
+
+        num_batches_per_epoch = 5
+
+        # 3. 计算每个epoch需要的样本数量
+        subset_size = num_batches_per_epoch * self.batch_size_per_device
+
+        # 4. 创建随机索引，用于选择子集
+        indices = torch.randperm(len(self.data_train))[:subset_size]
+
+        # 5. 创建 SubsetRandomSampler，使用相同的索引但不同的顺序
+        sampler = SubsetRandomSampler(indices)
+    
         return DataLoader(
             dataset=self.data_train,
             batch_size=self.batch_size_per_device,
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
-            shuffle=True,
+            sampler=sampler,
         )
 
     def val_dataloader(self) -> DataLoader[Any]:
@@ -187,12 +201,33 @@ class SCAREDDataModule(LightningDataModule):
 
         :return: The test dataloader.
         """
+
         return DataLoader(
             dataset=self.data_test,
             batch_size=self.batch_size_per_device,
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             shuffle=False,
+        )
+    
+    def predict_dataloader(self) -> Any:
+        num_batches_per_epoch = 5
+
+        # 3. 计算每个epoch需要的样本数量
+        subset_size = num_batches_per_epoch * self.batch_size_per_device
+
+        # 4. 创建随机索引，用于选择子集
+        indices = torch.randperm(len(self.data_train))[:subset_size]
+
+        # 5. 创建 SubsetRandomSampler，使用相同的索引但不同的顺序
+        sampler = SubsetRandomSampler(indices)
+    
+        return DataLoader(
+            dataset=self.data_train,
+            batch_size=self.batch_size_per_device,
+            num_workers=self.hparams.num_workers,
+            pin_memory=self.hparams.pin_memory,
+            sampler=sampler,
         )
 
     def teardown(self, stage: Optional[str] = None) -> None:

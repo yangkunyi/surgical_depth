@@ -145,6 +145,26 @@ class DepthLitModule(LightningModule):
         loss_feature = self.feature_loss.compute()
         
         return loss_gt, loss_feature, pred_depth, gt_depth
+    
+    def predict_step(self,batch, batch_idx) -> Any:
+        patch_h = batch['color_clip'].shape[-2] // 14
+        patch_w = batch['color_clip'].shape[-1] // 14
+
+        cnn_feature = self.temporal_encoder(batch['color_clip'])
+        dino_feature = self.dino_encoder.temporal_forward(batch['color_clip'])
+        pred_depth = self.depth_decoder.temporal_forward(cnn_feature, patch_h, patch_w)
+        gt_depth = batch['depth_gt_clip']
+
+        for i in range(len(cnn_feature)):
+            self.feature_loss.update(self.hparams.alpha * self.criterion(cnn_feature[i], dino_feature[i]))
+        
+        pred_depth = F.interpolate(pred_depth, size = gt_depth.shape[-3:])
+
+        return {
+            'pred_depth': pred_depth,
+            'targets': gt_depth
+        }
+        
 
     def training_step(
         self, batch, batch_idx: int
@@ -169,6 +189,22 @@ class DepthLitModule(LightningModule):
         self.log("train/loss_gt", self.train_loss_gt.compute(), on_step=False, on_epoch=True, prog_bar=True)
         self.log("train/loss_feature", self.train_loss_feature.compute(), on_step=False, on_epoch=True, prog_bar=True)
         # self.start_time = time.time()
+        
+        if(self.global_step%5 == 0):
+            abs_rel, sq_rel, rmse, rmse_log, a1, a2, a3 = compute_errors(pred_depth, targets)
+
+            # 记录误差指标到 WandB
+            self.logger.experiment.log({
+                "train/abs_rel": abs_rel, 
+                "train/sq_rel": sq_rel, 
+                "train/rmse": rmse, 
+                "train/rmse_log": rmse_log, 
+                "train/a1": a1, 
+                "train/a2": a2, 
+                "train/a3": a3,
+                "train/loss": loss
+            }, step=self.global_step) # 使用 global_step 记录指标
+
         return loss
 
     def on_train_epoch_end(self) -> None:
