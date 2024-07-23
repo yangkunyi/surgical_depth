@@ -151,3 +151,33 @@ def compute_errors(pred, gt):
     sq_rel = torch.mean(((gt - pred) ** 2) / gt)
 
     return [abs_rel, sq_rel, rmse, rmse_log, a1, a2, a3]
+
+
+def scale_invariant_log_loss(pred_depth, gt_depth, mask):
+    """
+    Computes the scale invariant log loss between predicted and ground truth depth maps.
+
+    Args:
+        pred_depth (torch.Tensor): Predicted depth map (B, 1, H, W).
+        gt_depth (torch.Tensor): Ground truth depth map (B, 1, H, W).
+        mask (torch.Tensor, optional): Mask of valid pixels (B, 1, H, W). 
+                                        Defaults to None, meaning all pixels are considered.
+
+    Returns:
+        torch.Tensor: The scale invariant log loss.
+    """
+
+
+    pred_depth = pred_depth[mask]
+    gt_depth = gt_depth[mask]
+
+    # Number of pixels
+    n_pixels = pred_depth.shape[0]
+
+    # Calculate difference and log difference
+    diff = pred_depth - gt_depth
+    log_diff = torch.log(pred_depth + 1e-6) - torch.log(gt_depth)
+    # Calculate the loss
+    loss = torch.mean(torch.square(log_diff)) - (1 / (n_pixels ** 2)) * torch.square(torch.sum(log_diff))
+    
+    return loss

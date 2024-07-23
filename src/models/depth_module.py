@@ -4,8 +4,8 @@ import torch
 from lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification.accuracy import Accuracy
-from .components import R2Plus1D, DinoEncoder, DPTHead
-from src.utils import compute_errors
+from .components import R2Plus1D, DinoEncoder, DPTHead, ResNetEncoder
+from src.utils import compute_errors, scale_invariant_log_loss
 import torch.nn.functional as F
 import time
 
@@ -73,7 +73,8 @@ class DepthLitModule(LightningModule):
         self.depth_decoder = DPTHead(1)
         self.dino_encoder.requires_grad_(False)
         # loss function
-        self.criterion = torch.nn.MSELoss()
+        self.criterion = scale_invariant_log_loss
+        self.mse = torch.nn.MSELoss()
         self.feature_loss = MeanMetric()
         # # metric objects for calculating and averaging accuracy across batches
         # self.train_acc = Accuracy(task="multiclass", num_classes=10)
@@ -132,17 +133,19 @@ class DepthLitModule(LightningModule):
         gt_depth = batch['depth_gt_clip']
 
         for i in range(len(cnn_feature)):
-            self.feature_loss.update(self.hparams.alpha * self.criterion(cnn_feature[i], dino_feature[i]))
-        
+            self.feature_loss.update(self.hparams.alpha * self.mse(cnn_feature[i], dino_feature[i]))
+
         pred_depth = F.interpolate(pred_depth, size = gt_depth.shape[-3:])
 
         mask = (gt_depth > MIN_DEPTH) & (gt_depth < MAX_DEPTH)
 
+
+        loss_gt = self.hparams.beta * self.criterion(pred_depth, gt_depth, mask)
+
+        
+        loss_feature = self.feature_loss.compute()
         pred_depth = pred_depth[mask]
         gt_depth = gt_depth[mask]
-
-        loss_gt = self.hparams.beta * self.criterion(pred_depth, gt_depth)
-        loss_feature = self.feature_loss.compute()
         
         return loss_gt, loss_feature, pred_depth, gt_depth
     
@@ -156,7 +159,7 @@ class DepthLitModule(LightningModule):
         gt_depth = batch['depth_gt_clip']
 
         for i in range(len(cnn_feature)):
-            self.feature_loss.update(self.hparams.alpha * self.criterion(cnn_feature[i], dino_feature[i]))
+            self.feature_loss.update(self.hparams.alpha * self.mse(cnn_feature[i], dino_feature[i]))
         
         pred_depth = F.interpolate(pred_depth, size = gt_depth.shape[-3:])
 
@@ -195,13 +198,13 @@ class DepthLitModule(LightningModule):
 
             # 记录误差指标到 WandB
             self.logger.experiment.log({
-                "train/abs_rel": abs_rel, 
-                "train/sq_rel": sq_rel, 
-                "train/rmse": rmse, 
-                "train/rmse_log": rmse_log, 
-                "train/a1": a1, 
-                "train/a2": a2, 
-                "train/a3": a3,
+                "metric/abs_rel": abs_rel, 
+                "metric/sq_rel": sq_rel, 
+                "metric/rmse": rmse, 
+                "metric/rmse_log": rmse_log, 
+                "metric/a1": a1, 
+                "metric/a2": a2, 
+                "metric/a3": a3,
                 "train/loss": loss
             }, step=self.global_step) # 使用 global_step 记录指标
 
@@ -223,12 +226,8 @@ class DepthLitModule(LightningModule):
         """
         loss_gt, loss_feature, pred_depth, targets = self.model_step(batch)
         loss = loss_gt + loss_feature
-        # update and log metrics
-        # print(loss)
         self.val_loss.update(loss)
-        # self.val_acc(preds, targets)
         self.log("val/loss", self.val_loss.compute(), on_step=False, on_epoch=True, prog_bar=True)
-        # self.log("val/acc", self.val_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def on_validation_epoch_end(self) -> None:
         "Lightning hook that is called when a validation epoch ends."
